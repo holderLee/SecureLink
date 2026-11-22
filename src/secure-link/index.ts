@@ -24,3 +24,4 @@ export {
 export { objectToQueryString } from "@/secure-link/utils/query";
 export { useFrontendCrypto } from "@/secure-link/hooks/useFrontendCrypto";
 export { genFrontendId, genSecurityParam } from "@/secure-link/api/security";
+export { demoEcho } from "@/secure-link/api/demoBiz";
