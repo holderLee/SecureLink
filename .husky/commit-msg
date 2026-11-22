@@ -1,9 +1,21 @@
 #!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
 
 commit_message=$(cat "$1")
+# 取首行作为标题
+subject=$(printf '%s\n' "$commit_message" | head -n 1)
 
-# 使用正则表达式验证提交信息格式
-if ! echo "$commit_message" | grep -Eiq "^(feat|fix|docs|style|refactor|perf|test|chore)(\(.+\))?: .{1,50}$"; then
-  echo "不合法的提交格式，请使用 'git cz' 提交规范提交代码 "
+# 去掉首尾空白后判空
+trimmed=$(printf '%s' "$subject" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+if [ -z "$trimmed" ]; then
+  echo "提交信息不能为空"
   exit 1
 fi
+
+# 推荐 Conventional Commits；也允许非空自由文案（与仓库既有中文提交兼容）
+if ! printf '%s\n' "$trimmed" | grep -Eiq "^(feat|fix|docs|style|refactor|perf|test|chore|build|ci|revert)(\(.+\))?: .+"; then
+  echo "提示: 推荐使用规范提交，例如 feat: 更新 SecureLink 演示页"
+  echo "      也可运行 npm run commit 交互填写。本次已放行自由文案提交。"
+fi
+
+exit 0

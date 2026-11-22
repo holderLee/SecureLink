@@ -4,7 +4,7 @@ const defaultSettings: AppSettings = {
   /** 当前版本 */
   version: "v1.0.0",
   /** 开启历史菜单标签 */
-  tagsView: true,
+  tagsView: false,
   /** 固定网站头部 */
   fixedHeader: false,
   /** 左侧系统logo展示 */
@@ -18,7 +18,7 @@ const defaultSettings: AppSettings = {
   /** 系统语言 可支持 中文：zh-cn 英文：en */
   language: "zh-cn",
   /** 主题色 */
-  themeColor: "#5d5cde",
+  themeColor: "#0d9488",
 };
 
 export default defaultSettings;

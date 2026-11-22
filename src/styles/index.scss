@@ -3,6 +3,10 @@
 @import "./reset";
 @import "./dark";
 
+:root {
+  --el-color-primary: #0d9488;
+}
+
 .app-container {
   padding: 10px;
 }
