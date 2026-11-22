@@ -194,7 +194,7 @@ const isAffix = (tag: TagView) => {
 const isFirstView = () => {
   try {
     return (
-      selectedTag.value.fullPath === "/dashboard" ||
+      selectedTag.value.fullPath === "/secure/secure-link" ||
       selectedTag.value.fullPath === tagsViewStore.visitedViews[1].fullPath
     );
   } catch (err) {

@@ -4,17 +4,8 @@ import "nprogress/nprogress.css";
 
 NProgress.configure({ showSpinner: false });
 
-/** 白名单路由 */
-const whiteList = ["/login"];
-
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (_to, _from, next) => {
   NProgress.start();
-
-  if (whiteList.includes(to.path)) {
-    next();
-    return;
-  }
-
   next();
 });
 

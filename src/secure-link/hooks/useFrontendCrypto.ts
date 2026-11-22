@@ -1,14 +1,7 @@
 /**
- * 前端安全初始化编排 Hook
- *
- * 对应技术方案：
- * - 阶段1：获取 / 缓存 frontendId（带过期时间）
- * - 阶段2：本地生成 RSA 密钥对 → 调 genSecurityParam → 解密得到 DEK/signKey
- *
- * 使用方式（演示页 / 后续 axios 拦截器）：
- * const { fetchFrontendId, fetchSecurityParam } = useFrontendCrypto()
- * const id = await fetchFrontendId()
- * await fetchSecurityParam(id)
+ * 前端安全初始化编排
+ * - 获取 / 缓存 frontendId
+ * - 生成 RSA 密钥对 → genSecurityParam → 解密得到 DEK/signKey
  */
 import { ElMessage } from "element-plus";
 import { genFrontendId, genSecurityParam } from "@/secure-link/api/security";
@@ -28,6 +21,10 @@ export const useFrontendCrypto = () => {
     const itemStr = localStorage.getItem(key);
     if (!itemStr) return "";
     const item = JSON.parse(itemStr);
+    if (item.expiry && Date.now() > item.expiry) {
+      localStorage.removeItem(key);
+      return "";
+    }
     return item.value;
   };
 
@@ -98,11 +95,11 @@ export const useFrontendCrypto = () => {
   };
 
   /**
-   * 阶段2：密钥协商
+   * 密钥协商
    *
    * 流程：
    * 1. 浏览器生成 RSA 公钥/私钥
-   * 2. 把 frontendId + pubKey 发给后端（或 Mock）
+   * 2. 把 frontendId + pubKey 发给后端（或本地 Mock）
    * 3. 拿回 eDek、eSignKey
    * 4. 用私钥解密，得到 DEK、signKey 并写入 keyManager
    */
@@ -142,7 +139,7 @@ export const useFrontendCrypto = () => {
   };
 
   /**
-   * 阶段1：获取 frontendId
+   * 获取 frontendId
    *
    * @param isUpdate true 时强制重新向服务端申请（并先缓存旧 DEK）
    *

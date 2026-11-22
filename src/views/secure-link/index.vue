@@ -1,13 +1,9 @@
 <script setup lang="ts">
 /**
- * SecureLink 演示页
- *
- * 1) 阶段1+2：frontendId + 密钥协商
- * 2) 阶段3+4：加密通信 + HMAC 验签（同一条 /client/demo/echo）
- * 3) 本地再预览一次签名参数（对照用）
+ * SecureLink 控制台：身份初始化、密钥协商、加密传输与验签探测
  */
 defineOptions({
-  name: "SecureLinkDemo",
+  name: "SecureLinkConsole",
   inheritAttrs: false,
 });
 
@@ -20,14 +16,14 @@ import {
   encryptDataWithDEK,
   generateSignature,
   jsonToBase64,
-  demoEcho,
+  secureEcho,
 } from "@/secure-link";
 
 const { fetchFrontendId, fetchSecurityParam, getLocalStorageWithExpiry } =
   useFrontendCrypto();
 
 const loading = ref(false);
-const encryptLoading = ref(false);
+const transportLoading = ref(false);
 const frontendId = ref("");
 const dekPreview = ref("");
 const signKeyPreview = ref("");
@@ -35,8 +31,8 @@ const encryptPayload = ref("");
 const signPreview = ref("");
 const decryptPreview = ref("");
 
-const mockModeText = computed(() =>
-  SECURE_LINK_MOCK ? "本地 Mock（不请求真实后端）" : "真实接口模式"
+const modeText = computed(() =>
+  SECURE_LINK_MOCK ? "本地 Mock" : "真实接口"
 );
 
 const mask = (value: string, keep = 8) => {
@@ -51,14 +47,13 @@ const refreshState = () => {
   signKeyPreview.value = mask(keyManager.getSignKey() || "");
 };
 
-/** 按钮1：身份 + 密钥协商 */
 const handleInit = async () => {
   loading.value = true;
   try {
     const id = (await fetchFrontendId(true)) as string;
     await fetchSecurityParam(id);
     refreshState();
-    ElMessage.success("阶段1+2 完成：已获取 frontendId / DEK / signKey");
+    ElMessage.success("已完成 frontendId 与密钥协商");
   } catch (error: any) {
     ElMessage.error(error?.message || "初始化失败");
   } finally {
@@ -66,12 +61,8 @@ const handleInit = async () => {
   }
 };
 
-/**
- * 按钮2：加密 + 验签 真实通信
- * - 左侧：本地预览 EncryptDataDto
- * - 右侧：后端验签通过后的解密响应
- */
-const handleEncryptDemo = async () => {
+/** 加密 + 验签往返探测 */
+const handleSecureTransport = async () => {
   const dek = keyManager.getDek();
   const signKey = keyManager.getSignKey();
   if (!dek || !signKey) {
@@ -79,27 +70,24 @@ const handleEncryptDemo = async () => {
     return;
   }
 
-  encryptLoading.value = true;
+  transportLoading.value = true;
   try {
-    const plain = { password: "123456", demo: true, at: Date.now() };
-
-    // 本地预览密文形态（真正发出去的密文由拦截器再生成一份）
+    const plain = { password: "123456", probe: true, at: Date.now() };
     const enc = await encryptDataWithDEK(plain, dek);
     encryptPayload.value = JSON.stringify(enc, null, 2);
 
-    // 拦截器：encrypt + sign → 后端解密→验签→加密响应→前端解密
-    const res: any = await demoEcho(plain);
+    const res: any = await secureEcho(plain);
     decryptPreview.value = JSON.stringify(res?.data ?? res, null, 2);
-    ElMessage.success("加密+验签通信完成");
+    ElMessage.success("加密传输与验签成功");
   } catch (error: any) {
-    ElMessage.error(error?.message || "加密/验签通信失败");
+    ElMessage.error(error?.message || "传输失败");
   } finally {
-    encryptLoading.value = false;
+    transportLoading.value = false;
   }
 };
 
-/** 按钮3：仅本地预览签名参数（与拦截器规则一致，便于对照） */
-const handleSignDemo = async () => {
+/** 本地预览签名字段（不发起请求） */
+const handleSignPreview = async () => {
   const signKey = keyManager.getSignKey();
   if (!signKey) {
     ElMessage.warning("请先完成密钥协商");
@@ -115,26 +103,26 @@ const handleSignDemo = async () => {
   };
   const sign = await generateSignature(signParams, signKey);
   signPreview.value = JSON.stringify({ ...signParams, sign }, null, 2);
-  ElMessage.success("本地签名参数预览已生成（真实验签请点按钮2）");
+  ElMessage.success("签名参数已生成");
 };
 
 refreshState();
 </script>
 
 <template>
-  <div class="secure-link-demo">
+  <div class="secure-link-page">
     <el-card shadow="never">
       <template #header>
         <div class="header">
-          <span>SecureLink 敏感数据安全传输演示</span>
-          <el-tag size="small" type="warning">{{ mockModeText }}</el-tag>
+          <span>SecureLink 安全传输</span>
+          <el-tag size="small" type="warning">{{ modeText }}</el-tag>
         </div>
       </template>
 
       <el-alert
         type="info"
         :closable="false"
-        title="联调：①身份密钥 ②加密+HMAC验签(/client/demo/echo)。请同时启动 server:8989。"
+        title="流程：密钥协商 → POST /client/secure/echo（AES + HMAC）。请确保服务端已启动。"
         class="mb-16"
       />
 
@@ -144,13 +132,16 @@ refreshState();
         </el-button>
         <el-button
           :disabled="!dekPreview || dekPreview === '-'"
-          :loading="encryptLoading"
-          @click="handleEncryptDemo"
+          :loading="transportLoading"
+          @click="handleSecureTransport"
         >
-          2. 加密 + 验签通信
+          2. 加密传输 + 验签
         </el-button>
-        <el-button :disabled="!signKeyPreview || signKeyPreview === '-'" @click="handleSignDemo">
-          3. 本地签名参数预览
+        <el-button
+          :disabled="!signKeyPreview || signKeyPreview === '-'"
+          @click="handleSignPreview"
+        >
+          3. 预览签名参数
         </el-button>
       </el-space>
 
@@ -168,23 +159,23 @@ refreshState();
 
       <el-row :gutter="16" class="mt-16">
         <el-col :span="12">
-          <h4>加密请求体 EncryptDataDto（本地预览）</h4>
+          <h4>请求密文 EncryptDataDto</h4>
           <pre>{{ encryptPayload || "暂无" }}</pre>
         </el-col>
         <el-col :span="12">
-          <h4>后端解密+验签后的响应（前端已解密）</h4>
+          <h4>响应明文（已解密）</h4>
           <pre>{{ decryptPreview || "暂无" }}</pre>
         </el-col>
       </el-row>
 
-      <h4 class="mt-16">签名头参数预览</h4>
+      <h4 class="mt-16">签名参数</h4>
       <pre>{{ signPreview || "暂无" }}</pre>
     </el-card>
   </div>
 </template>
 
 <style scoped lang="scss">
-.secure-link-demo {
+.secure-link-page {
   padding: 16px;
 
   .header {

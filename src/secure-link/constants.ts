@@ -25,12 +25,7 @@ export const REQUEST_KMS_FAIL_CODE = 1002062;
 export const VERIFY_SIGN_EXPIRED_CODE = -201;
 
 /**
- * 是否启用本地 Mock
- *
- * - true：不请求真实后端，由 mockSecurity 在浏览器内模拟 Vault/接口返回
- * - false：调用真实 `/client/security/...` 接口
- *
- * 开关来源：`.env.*` 中的 VITE_SECURE_LINK_MOCK
+ * 是否启用本地 Mock 安全接口（仅开发；生产必须为 false）
  */
 export const SECURE_LINK_MOCK =
   String(import.meta.env.VITE_SECURE_LINK_MOCK ?? "true") === "true";

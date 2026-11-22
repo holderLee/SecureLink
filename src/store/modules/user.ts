@@ -1,76 +1,18 @@
+/**
+ * 用户会话（当前仅持有 accessToken，供请求头 / 验签 token 字段使用）
+ */
 import { defineStore } from "pinia";
-import { loginApi, logoutApi } from "@/api/auth";
-import { getUserInfoApi } from "@/api/user";
 import { resetRouter } from "@/router";
 import { store } from "@/store";
-import { LoginData } from "@/api/auth/types";
-import { UserInfo } from "@/api/user/types";
 import { useStorage } from "@vueuse/core";
 
 export const useUserStore = defineStore("user", () => {
-  const user: UserInfo = {
-    roles: [],
-    perms: [],
-  };
   const token = useStorage("accessToken", "");
 
-  /**
-   * 登录
-   * @param {LoginData}
-   */
-  function login(loginData: LoginData) {
-    return new Promise<void>((resolve, reject) => {
-      loginApi(loginData)
-        .then((response) => {
-          const { tokenType, accessToken } = response.data;
-          token.value = tokenType + " " + accessToken;
-          resolve();
-        })
-        .catch((error) => {
-          reject(error);
-        });
-    });
+  function setToken(value: string) {
+    token.value = value || "";
   }
 
-  /** 获取信息(用户昵称、头像、角色集合、权限集合) */
-  function getUserInfo() {
-    return new Promise<UserInfo>((resolve, reject) => {
-      getUserInfoApi()
-        .then(({ data }) => {
-          if (!data) {
-            reject("Verification failed, please Login again.");
-            return;
-          }
-          if (!data.roles || data.roles.length <= 0) {
-            reject("getUserInfo: roles must be a non-null array!");
-            return;
-          }
-          Object.assign(user, { ...data });
-          resolve(data);
-        })
-        .catch((error) => {
-          reject(error);
-        });
-    });
-  }
-
-  /** 退出登录 */
-  function logout() {
-    return new Promise<void>((resolve, reject) => {
-      logoutApi()
-        .then(() => {
-          token.value = "";
-          /** 清空路由 */
-          location.reload();
-          resolve();
-        })
-        .catch((error) => {
-          reject(error);
-        });
-    });
-  }
-
-  /** 移除Token */
   function resetToken() {
     return new Promise<void>((resolve) => {
       token.value = "";
@@ -79,17 +21,21 @@ export const useUserStore = defineStore("user", () => {
     });
   }
 
+  function logout() {
+    return resetToken().then(() => {
+      location.reload();
+    });
+  }
+
   return {
     token,
-    user,
-    login,
-    getUserInfo,
-    logout,
+    user: { roles: [] as string[], perms: [] as string[] },
+    setToken,
     resetToken,
+    logout,
   };
 });
 
-/** 非setup */
 export function useUserStoreHook() {
   return useUserStore(store);
 }

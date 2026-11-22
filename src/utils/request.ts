@@ -1,14 +1,12 @@
 /**
  * Axios 实例（SecureLink）
  *
- * 已接通：
  * - 自动携带 frontendId
  * - config.encrypt === true → AES 加密请求体 / 解密响应
- * - config.sign === true → HMAC 验签头（sign/nonce/timestamp/lang/token）
+ * - config.sign === true → HMAC 验签头
  *
- * 验签约定（与技术方案一致）：
- * - param 取「加密前」的业务 JSON 字符串，再 Base64
- * - 后端先解密再验签
+ * 注意：此处禁止从 `@/secure-link` 桶文件导入（桶会再导出 api → request，形成循环依赖）。
+ * 只从 utils/hooks 的具体文件引入。
  */
 import axios, { InternalAxiosRequestConfig, AxiosResponse } from "axios";
 import { useUserStoreHook } from "@/store/modules/user";
@@ -19,21 +17,26 @@ import {
   decryptDataWithDEK,
   generateSignature,
   jsonToBase64,
-  objectToQueryString,
-  keyManager,
-  useFrontendCrypto,
-} from "@/secure-link";
+} from "@/secure-link/utils/webCrypto";
+import { objectToQueryString } from "@/secure-link/utils/query";
+import { keyManager } from "@/secure-link/utils/keyManager";
 
-const { getLocalStorageWithExpiry } = useFrontendCrypto();
+/** 读取带过期结构的 frontendId（避免 request ↔ useFrontendCrypto 循环依赖） */
+function getFrontendIdFromStorage() {
+  const itemStr = localStorage.getItem("frontendId");
+  if (!itemStr) return "";
+  try {
+    const item = JSON.parse(itemStr);
+    if (item.expiry && Date.now() > item.expiry) {
+      localStorage.removeItem("frontendId");
+      return "";
+    }
+    return item.value || "";
+  } catch {
+    return "";
+  }
+}
 
-/** 创建 axios 实例 */
-const service = axios.create({
-  baseURL: import.meta.env.VITE_APP_BASE_API,
-  timeout: 50000,
-  headers: { "Content-Type": "application/json;charset=utf-8" },
-});
-
-/** 读取当前语言（签名字段 lang） */
 function currentLang() {
   try {
     return String((i18n.global as any).locale?.value || "zh-cn");
@@ -42,7 +45,12 @@ function currentLang() {
   }
 }
 
-/** 请求拦截器 */
+const service = axios.create({
+  baseURL: import.meta.env.VITE_APP_BASE_API,
+  timeout: 50000,
+  headers: { "Content-Type": "application/json;charset=utf-8" },
+});
+
 service.interceptors.request.use(
   async (config: InternalAxiosRequestConfig | any) => {
     const userStore = useUserStoreHook();
@@ -51,15 +59,11 @@ service.interceptors.request.use(
       config.headers.Authorization = token;
     }
 
-    // 所有安全相关请求都需要 frontendId（后端靠它找 DEK/signKey）
-    const frontendId = getLocalStorageWithExpiry("frontendId") || "";
+    const frontendId = getFrontendIdFromStorage();
     if (frontendId) {
       config.headers.frontendId = frontendId;
     }
 
-    /**
-     * 加密前先留一份明文，供验签 param 使用（方案：加密前原始 body）
-     */
     let plainForSign: any = undefined;
     if (config.encrypt) {
       const dek = keyManager.getDek();
@@ -72,9 +76,6 @@ service.interceptors.request.use(
       config.data = await encryptDataWithDEK(plainForSign, dek);
     }
 
-    /**
-     * 验签：config.sign === true 时生成 HMAC 头
-     */
     if (config.sign) {
       const signKey = keyManager.getSignKey();
       if (!signKey) {
@@ -87,7 +88,6 @@ service.interceptors.request.use(
         lang: currentLang(),
         token: token || "",
         timestamp: Date.now(),
-        // 方案要求 32 位随机串：去掉 UUID 横线
         nonce: crypto.randomUUID().replace(/-/g, ""),
         param: "",
       };
@@ -97,7 +97,6 @@ service.interceptors.request.use(
         const qs = objectToQueryString(config.params);
         signParams.param = qs ? jsonToBase64(qs) : "";
       } else {
-        // POST：优先用加密前明文；未加密则用当前 body
         let raw = "";
         if (config.encrypt) {
           raw = JSON.stringify(plainForSign ?? {});
@@ -119,18 +118,14 @@ service.interceptors.request.use(
 
     return config;
   },
-  (error: any) => {
-    return Promise.reject(error);
-  }
+  (error: any) => Promise.reject(error)
 );
 
-/** 响应拦截器 */
 service.interceptors.response.use(
   async (response: AxiosResponse) => {
     const res = response.data;
     const { code, msg } = res || {};
 
-    // 兼容模板成功码 "00000" 与 SecureLink 成功码 0
     if (code === "00000" || code === 0) {
       if (res?.encrypt) {
         const dek = keyManager.getDek();
@@ -147,7 +142,6 @@ service.interceptors.response.use(
       return res;
     }
 
-    /** 响应数据为二进制流处理(Excel导出) */
     if (response.data instanceof ArrayBuffer) {
       return response;
     }
@@ -158,7 +152,6 @@ service.interceptors.response.use(
   (error: any) => {
     if (error.response?.data) {
       const { code, msg } = error.response.data;
-      /** token 过期,重新登录 */
       if (code === "A0230") {
         ElMessageBox.confirm("当前页面已失效，请重新登录", "提示", {
           confirmButtonText: "确定",

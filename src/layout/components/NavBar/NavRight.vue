@@ -1,12 +1,9 @@
 <template>
-  <!-- 导航栏设置(窄屏隐藏)-->
   <div v-if="device !== 'mobile'" class="setting-container">
-    <!--全屏 -->
     <div class="setting-item" @click="toggle">
       <SvgIcon :icon-class="isFullscreen ? 'exit-fullscreen' : 'fullscreen'" />
     </div>
   </div>
-  <!-- 用户头像 -->
   <el-dropdown trigger="click">
     <div class="avatar-container">
       <img src="https://picsum.photos/200?imageView2/1/w/80/h/80" />
@@ -14,8 +11,8 @@
     </div>
     <template #dropdown>
       <el-dropdown-menu>
-        <router-link to="/">
-          <el-dropdown-item>{{ $t("navbar.dashboard") }}</el-dropdown-item>
+        <router-link to="/secure/secure-link">
+          <el-dropdown-item>SecureLink</el-dropdown-item>
         </router-link>
         <el-dropdown-item divided @click="logout">
           {{ $t("navbar.logout") }}
@@ -26,7 +23,6 @@
 </template>
 <script setup lang="ts">
 import { storeToRefs } from "pinia";
-import { useRoute, useRouter } from "vue-router";
 import { useAppStore } from "@/store/modules/app";
 import { useTagsViewStore } from "@/store/modules/tagsView";
 import { useUserStore } from "@/store/modules/user";
@@ -37,31 +33,17 @@ import SvgIcon from "@/components/SvgIcon/index.vue";
 const appStore = useAppStore();
 const tagsViewStore = useTagsViewStore();
 const userStore = useUserStore();
-const route = useRoute();
-const router = useRouter();
-const { device } = storeToRefs(appStore); // 设备类型：desktop-宽屏设备 || mobile-窄屏设备
-/**
- * vueUse 全屏
- */
+const { device } = storeToRefs(appStore);
 const { isFullscreen, toggle } = useFullscreen();
 
-/**
- * 注销
- */
 const logout = () => {
-  ElMessageBox.confirm("确定注销并退出系统吗？", "提示", {
+  ElMessageBox.confirm("确定清除本地会话并刷新吗？", "提示", {
     confirmButtonText: "确定",
     cancelButtonText: "取消",
     type: "warning",
   }).then(() => {
-    userStore
-      .logout()
-      .then(() => {
-        tagsViewStore.delAllViews();
-      })
-      .then(() => {
-        router.push(`/login?redirect=${route.fullPath}`);
-      });
+    tagsViewStore.delAllViews();
+    userStore.logout();
   });
 };
 </script>
@@ -80,21 +62,22 @@ const logout = () => {
     cursor: pointer;
 
     &:hover {
-      background: var(--el-disabled-bg-color);
+      background: var(--el-color-info-light-9);
     }
   }
 }
 
 .avatar-container {
   display: flex;
-  place-items: center center;
+  align-items: center;
+  justify-items: center;
   margin: 0 5px;
   cursor: pointer;
 
   img {
     width: 40px;
     height: 40px;
-    border-radius: 5px;
+    border-radius: 50%;
   }
 }
 </style>

@@ -1,9 +1,7 @@
 /**
  * 对象转 QueryString
  *
- * 用途（验签阶段）：
- * - GET 请求签名时，param 取“? 后面那一串查询串”
- * - 本方法把 config.params 对象稳定地拼成 key=value&key=value
+ * GET 验签时 param 取查询串；把 params 对象拼成 key=value&key=value
  *
  * @param obj 查询参数对象
  * @param options.encode 是否 URL 编码，默认 true

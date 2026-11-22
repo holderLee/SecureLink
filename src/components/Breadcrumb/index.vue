@@ -36,9 +36,9 @@ const getBreadcrumb = () => {
     (item) => item.meta && item.meta.title
   );
   const first = matched[0];
-  if (!isDashboard(first)) {
+  if (!isSecureHome(first)) {
     matched = [
-      { path: "/dashboard", meta: { title: "dashboard" } } as any,
+      { path: "/secure/secure-link", meta: { title: "SecureLink" } } as any,
     ].concat(matched);
   }
   breadcrumbs.value = matched.filter((item) => {
@@ -46,14 +46,14 @@ const getBreadcrumb = () => {
   });
 };
 
-const isDashboard = (route: RouteLocationMatched) => {
+const isSecureHome = (route: RouteLocationMatched) => {
   const name = route && route.name;
   if (!name) {
     return false;
   }
   return (
     name.toString().trim().toLocaleLowerCase() ===
-    "Dashboard".toLocaleLowerCase()
+    "SecureLinkConsole".toLocaleLowerCase()
   );
 };
 

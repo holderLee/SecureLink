@@ -10,7 +10,7 @@
         <ul class="list-unstyled">
           <li>或者你可以去:</li>
           <li class="link-type">
-            <router-link to="/dashboard"> 回首页 </router-link>
+            <router-link to="/secure/secure-link"> 回首页 </router-link>
           </li>
         </ul>
       </el-col>

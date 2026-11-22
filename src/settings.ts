@@ -1,6 +1,6 @@
 const defaultSettings: AppSettings = {
   /** 系统名称 */
-  title: "后台管理系统",
+  title: "SecureLink",
   /** 当前版本 */
   version: "v1.0.0",
   /** 开启历史菜单标签 */

@@ -1,12 +1,6 @@
 /**
- * SecureLink 本地 Mock（模拟后端 + Vault）
- *
- * 目的：
- * - 前端抽离后，即使没有 Java/Node 后端，也能把阶段1/2 跑通
- * - Mock 返回的数据结构尽量贴近真实接口，便于之后切真实环境
- *
- * 重要：
- * Mock 只用于开发演示，不能替代生产 Vault/KMS。
+ * 本地 Mock 安全接口（VITE_SECURE_LINK_MOCK=true 时启用）
+ * 仅用于无后端时的本地开发，生产环境必须关闭。
  */
 import { SUCCESS_CODE } from "@/secure-link/constants";
 import { secureCryptoHelpers } from "@/secure-link/utils/webCrypto";

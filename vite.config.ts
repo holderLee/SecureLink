@@ -70,7 +70,6 @@ export default defineConfig(({ mode }: ConfigEnv): UserConfig => {
         "axios",
         "@vueuse/core",
         "path-to-regexp",
-        "echarts",
         "vue-i18n",
       ],
     },

@@ -1,15 +1,8 @@
 /**
  * 密钥内存管理器（keyManager）
- *
- * 对应技术方案阶段2完成后，前端需要在内存中持有：
- * - DEK：AES-256-GCM 业务数据加解密密钥（Base64 字符串）
- * - signKey：HMAC-SHA256 接口验签密钥
- *
- * 设计要点（与方案一致）：
- * 1. 不落盘、不进 localStorage，只放模块级变量（进程/页面内存）
- * 2. 退出登录、重新协商时应 clear / 重新 setKeys
- * 3. cacheDek：frontendId 过期强制刷新时，先缓存旧 DEK，
- *    用于“已加密的旧请求体先解密，再用新 DEK 重新加密”的衔接场景
+ * - DEK：AES-256-GCM（Base64，仅内存）
+ * - signKey：HMAC-SHA256（仅内存）
+ * - cacheDek：密钥轮换时暂存旧 DEK，用于旧密文重加密
  */
 
 /** 当前生效的数据加密密钥 DEK（Base64） */
