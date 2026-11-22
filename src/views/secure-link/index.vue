@@ -24,6 +24,7 @@ const { fetchFrontendId, fetchSecurityParam, getLocalStorageWithExpiry } =
 
 const loading = ref(false);
 const transportLoading = ref(false);
+const signLoading = ref(false);
 const frontendId = ref("");
 const dekPreview = ref("");
 const signKeyPreview = ref("");
@@ -38,6 +39,37 @@ const modeText = computed(() => (SECURE_LINK_MOCK ? "本地 Mock" : "真实接�
 const hasKeys = computed(
   () => Boolean(dekPreview.value) && dekPreview.value !== "-"
 );
+
+/** 任一操作进行中：禁止连点并发请求 */
+const isBusy = computed(
+  () => loading.value || transportLoading.value || signLoading.value
+);
+
+/** 同步锁：挡住同一事件循环内的连点（早于 Vue 重渲染） */
+let actionLocked = false;
+/** 操作结束后的冷却，避免接口过快时连点立刻再发 */
+const ACTION_COOLDOWN_MS = 1500;
+let cooldownUntil = 0;
+
+const notify = (type: "success" | "error" | "warning", message: string) => {
+  ElMessage.closeAll();
+  ElMessage[type](message);
+};
+
+const canStartAction = () => {
+  if (actionLocked || isBusy.value) return false;
+  if (Date.now() < cooldownUntil) return false;
+  return true;
+};
+
+const beginAction = () => {
+  actionLocked = true;
+};
+
+const endAction = () => {
+  actionLocked = false;
+  cooldownUntil = Date.now() + ACTION_COOLDOWN_MS;
+};
 
 /** 流程可视化激活到第几步（0–3） */
 const flowActive = computed(() => {
@@ -89,29 +121,60 @@ const scrollToPlay = () => {
 };
 
 const handleInit = async () => {
-  loading.value = true;
-  try {
-    const id = (await fetchFrontendId(true)) as string;
-    await fetchSecurityParam(id);
+  if (!canStartAction()) return;
+
+  const cachedId = getLocalStorageWithExpiry("frontendId");
+  const hasMemoryKeys = Boolean(keyManager.getDek() && keyManager.getSignKey());
+
+  // 本地 frontendId 未过期且内存密钥仍在：直接复用，不发请求
+  if (cachedId && hasMemoryKeys) {
+    beginAction();
     refreshState();
     playStep.value = Math.max(playStep.value, 1);
-    ElMessage.success("已完成 frontendId 与密钥协商");
+    notify("success", "已复用缓存的 frontendId 与密钥");
+    endAction();
+    return;
+  }
+
+  beginAction();
+  loading.value = true;
+  try {
+    // 不传 true：优先读 localStorage 缓存，过期/缺失才向服务端申请
+    const id = (await fetchFrontendId()) as string;
+    if (!id) {
+      throw new Error("未获取到 frontendId");
+    }
+    // 刷新后密钥只在内存丢失时需要重新协商
+    if (!keyManager.getDek() || !keyManager.getSignKey()) {
+      await fetchSecurityParam(id);
+    }
+    refreshState();
+    playStep.value = Math.max(playStep.value, 1);
+    notify(
+      "success",
+      cachedId
+        ? "已复用 frontendId，并完成密钥协商"
+        : "已完成 frontendId 与密钥协商"
+    );
   } catch (error: any) {
-    ElMessage.error(error?.message || "初始化失败");
+    notify("error", error?.message || "初始化失败");
   } finally {
     loading.value = false;
+    endAction();
   }
 };
 
 /** 加密 + 验签往返探测 */
 const handleSecureTransport = async () => {
+  if (!canStartAction()) return;
   const dek = keyManager.getDek();
   const signKey = keyManager.getSignKey();
   if (!dek || !signKey) {
-    ElMessage.warning("请先完成密钥协商");
+    notify("warning", "请先完成密钥协商");
     return;
   }
 
+  beginAction();
   transportLoading.value = true;
   try {
     const plain = { password: "123456", probe: true, at: Date.now() };
@@ -121,33 +184,45 @@ const handleSecureTransport = async () => {
     const res: any = await secureEcho(plain);
     decryptPreview.value = JSON.stringify(res?.data ?? res, null, 2);
     playStep.value = Math.max(playStep.value, 2);
-    ElMessage.success("加密传输与验签成功");
+    notify("success", "加密传输与验签成功");
   } catch (error: any) {
-    ElMessage.error(error?.message || "传输失败");
+    notify("error", error?.message || "传输失败");
   } finally {
     transportLoading.value = false;
+    endAction();
   }
 };
 
 /** 本地预览签名字段（不发起请求） */
 const handleSignPreview = async () => {
+  if (!canStartAction()) return;
   const signKey = keyManager.getSignKey();
   if (!signKey) {
-    ElMessage.warning("请先完成密钥协商");
+    notify("warning", "请先完成密钥协商");
     return;
   }
-  const body = { password: "123456" };
-  const signParams: Record<string, any> = {
-    lang: "zh-cn",
-    token: "",
-    timestamp: Date.now(),
-    nonce: crypto.randomUUID().replace(/-/g, ""),
-    param: jsonToBase64(JSON.stringify(body)),
-  };
-  const sign = await generateSignature(signParams, signKey);
-  signPreview.value = JSON.stringify({ ...signParams, sign }, null, 2);
-  playStep.value = Math.max(playStep.value, 3);
-  ElMessage.success("签名参数已生成");
+
+  beginAction();
+  signLoading.value = true;
+  try {
+    const body = { password: "123456" };
+    const signParams: Record<string, any> = {
+      lang: "zh-cn",
+      token: "",
+      timestamp: Date.now(),
+      nonce: crypto.randomUUID().replace(/-/g, ""),
+      param: jsonToBase64(JSON.stringify(body)),
+    };
+    const sign = await generateSignature(signParams, signKey);
+    signPreview.value = JSON.stringify({ ...signParams, sign }, null, 2);
+    playStep.value = Math.max(playStep.value, 3);
+    notify("success", "签名参数已生成");
+  } catch (error: any) {
+    notify("error", error?.message || "签名预览失败");
+  } finally {
+    signLoading.value = false;
+    endAction();
+  }
 };
 
 refreshState();
@@ -218,7 +293,6 @@ refreshState();
           type="button"
           class="sl-play__step"
           :class="{ 'is-current': playStep === 0, 'is-done': playStep >= 1 }"
-          :disabled="loading"
           @click="handleInit"
         >
           <span class="sl-play__num">1</span>
@@ -231,7 +305,7 @@ refreshState();
           type="button"
           class="sl-play__step"
           :class="{ 'is-current': playStep === 1, 'is-done': playStep >= 2 }"
-          :disabled="!hasKeys || transportLoading"
+          :disabled="!hasKeys"
           @click="handleSecureTransport"
         >
           <span class="sl-play__num">2</span>
