@@ -83,7 +83,7 @@ const permissionStore = usePermissionStore();
 const tagsViewStore = useTagsViewStore();
 const appStore = useAppStore();
 const { visitedViews } = storeToRefs(tagsViewStore);
-console.log("visitedViews", visitedViews);
+// console.log("visitedViews", visitedViews);
 const settingsStore = useSettingsStore();
 const layout = computed(() => settingsStore.layout);
 const selectedTag = ref<TagView>({
@@ -138,7 +138,7 @@ const filterAffixTags = (routes: RouteRecordRaw[], basePath = "/") => {
 
 const initTags = () => {
   const tags: TagView[] = filterAffixTags(permissionStore.routes);
-  console.log("initTags", tags);
+  // console.log("initTags", tags);
   affixTags.value = tags;
   for (const tag of tags) {
     if (tag.name) {
@@ -148,7 +148,7 @@ const initTags = () => {
 };
 
 const addTags = () => {
-  console.log("addTags", visitedViews);
+  // console.log("addTags", visitedViews);
   if (route.meta.title) {
     tagsViewStore.addView({
       name: route.name as string,
@@ -162,7 +162,7 @@ const addTags = () => {
 };
 
 const moveToCurrentTag = () => {
-  console.log("moveToCurrentTag", visitedViews);
+  // console.log("moveToCurrentTag", visitedViews);
   /** 使用 nextTick() 的目的是确保在更新 tagsView 组件之前，scrollPaneRef 对象已经滚动到了正确的位置。 */
   nextTick(() => {
     for (const tag of visitedViews.value) {

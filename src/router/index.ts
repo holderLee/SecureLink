@@ -20,7 +20,6 @@ export const constantRoutes: RouteRecordRaw[] = [
     component: () => import("@/views/login/index.vue"),
     meta: { hidden: true },
   },
-
   {
     path: "/",
     name: "/",
@@ -49,6 +48,25 @@ export const constantRoutes: RouteRecordRaw[] = [
         path: "404",
         component: () => import("@/views/error-page/404.vue"),
         meta: { hidden: true },
+      },
+    ],
+  },
+  {
+    path: "/secure",
+    component: Layout,
+    name: "SecureLink",
+    redirect: "/secure/secure-link",
+    children: [
+      {
+        path: "secure-link",
+        component: () => import("@/views/secure-link/index.vue"),
+        name: "SecureLinkDemo",
+        meta: {
+          title: "SecureLink",
+          icon: "security",
+          keepAlive: false,
+          alwaysShow: false,
+        },
       },
     ],
   },

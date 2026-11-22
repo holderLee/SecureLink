@@ -13,6 +13,8 @@ interface ImportMetaEnv {
   /** API 基础路径 */
   VITE_APP_BASE_API: string;
   VITE_APP_API_URL: string;
+  /** SecureLink 是否使用本地 Mock 安全接口 */
+  VITE_SECURE_LINK_MOCK: string;
 }
 
 interface ImportMeta {

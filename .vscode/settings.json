@@ -1,5 +1,8 @@
 {
   "typescript.tsdk": "./node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "vue.server.hybridMode": true,
+  "eslint.workingDirectories": [{ "mode": "auto" }],
   "editor.tabSize": 2,
 	"editor.formatOnSave": true,
 	"editor.defaultFormatter": "esbenp.prettier-vscode",

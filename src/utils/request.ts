@@ -27,7 +27,8 @@ service.interceptors.request.use(
 service.interceptors.response.use(
   (response: AxiosResponse) => {
     const { code, msg } = response.data;
-    if (code === "00000") {
+    // 兼容模板成功码 "00000" 与 SecureLink 安全接口成功码 0
+    if (code === "00000" || code === 0) {
       return response.data;
     }
     /** 响应数据为二进制流处理(Excel导出) */
