@@ -1,9 +1,9 @@
 /**
- * 加密通信演示 API
+ * 加密 + 验签 演示 API
  *
  * 对应后端：POST /client/demo/echo
- * - 请求体：由 axios 拦截器按 encrypt:true 自动加密
- * - 响应体：由 axios 拦截器按 encrypt:true 自动解密
+ * - encrypt:true → 拦截器 AES 加密 body / 解密响应
+ * - sign:true    → 拦截器附加 HMAC 验签头（param 用加密前明文）
  */
 import request from "@/utils/request";
 
@@ -12,7 +12,7 @@ export function demoEcho(data: Record<string, any>) {
     url: "/client/demo/echo",
     method: "post",
     data,
-    // 关键：打开后请求拦截器会 AES 加密 body
     encrypt: true,
+    sign: true,
   } as any);
 }

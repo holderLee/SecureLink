@@ -3,8 +3,8 @@
  * SecureLink 演示页
  *
  * 1) 阶段1+2：frontendId + 密钥协商
- * 2) 阶段3：前后端加密通信（POST /client/demo/echo）
- * 3) 阶段4：本地组装签名参数（验签联调后续再做）
+ * 2) 阶段3+4：加密通信 + HMAC 验签（同一条 /client/demo/echo）
+ * 3) 本地再预览一次签名参数（对照用）
  */
 defineOptions({
   name: "SecureLinkDemo",
@@ -67,13 +67,14 @@ const handleInit = async () => {
 };
 
 /**
- * 按钮2：真实加解密通信
- * - 先本地加密一份展示 EncryptDataDto（便于对照）
- * - 再走 demoEcho：拦截器加密请求、解密响应
+ * 按钮2：加密 + 验签 真实通信
+ * - 左侧：本地预览 EncryptDataDto
+ * - 右侧：后端验签通过后的解密响应
  */
 const handleEncryptDemo = async () => {
   const dek = keyManager.getDek();
-  if (!dek) {
+  const signKey = keyManager.getSignKey();
+  if (!dek || !signKey) {
     ElMessage.warning("请先完成密钥协商");
     return;
   }
@@ -82,22 +83,22 @@ const handleEncryptDemo = async () => {
   try {
     const plain = { password: "123456", demo: true, at: Date.now() };
 
-    // 仅用于页面展示“即将发出的密文长什么样”
+    // 本地预览密文形态（真正发出去的密文由拦截器再生成一份）
     const enc = await encryptDataWithDEK(plain, dek);
     encryptPayload.value = JSON.stringify(enc, null, 2);
 
-    // 真实打后端：request 拦截器会再加密一次并自动解密响应
+    // 拦截器：encrypt + sign → 后端解密→验签→加密响应→前端解密
     const res: any = await demoEcho(plain);
     decryptPreview.value = JSON.stringify(res?.data ?? res, null, 2);
-    ElMessage.success("加密通信完成：后端已解密请求并加密返回");
+    ElMessage.success("加密+验签通信完成");
   } catch (error: any) {
-    ElMessage.error(error?.message || "加密通信失败");
+    ElMessage.error(error?.message || "加密/验签通信失败");
   } finally {
     encryptLoading.value = false;
   }
 };
 
-/** 按钮3：本地签名参数（验签服务端后续再接） */
+/** 按钮3：仅本地预览签名参数（与拦截器规则一致，便于对照） */
 const handleSignDemo = async () => {
   const signKey = keyManager.getSignKey();
   if (!signKey) {
@@ -106,7 +107,7 @@ const handleSignDemo = async () => {
   }
   const body = { password: "123456" };
   const signParams: Record<string, any> = {
-    lang: "zh-CN",
+    lang: "zh-cn",
     token: "",
     timestamp: Date.now(),
     nonce: crypto.randomUUID().replace(/-/g, ""),
@@ -114,7 +115,7 @@ const handleSignDemo = async () => {
   };
   const sign = await generateSignature(signParams, signKey);
   signPreview.value = JSON.stringify({ ...signParams, sign }, null, 2);
-  ElMessage.success("本地验签参数生成完成（服务端验签尚未接入）");
+  ElMessage.success("本地签名参数预览已生成（真实验签请点按钮2）");
 };
 
 refreshState();
@@ -133,7 +134,7 @@ refreshState();
       <el-alert
         type="info"
         :closable="false"
-        title="当前联调：①身份密钥 ②加解密通信(/client/demo/echo)。验签后续再补。请同时启动 server:8989。"
+        title="联调：①身份密钥 ②加密+HMAC验签(/client/demo/echo)。请同时启动 server:8989。"
         class="mb-16"
       />
 
@@ -146,10 +147,10 @@ refreshState();
           :loading="encryptLoading"
           @click="handleEncryptDemo"
         >
-          2. 前后端加密通信
+          2. 加密 + 验签通信
         </el-button>
         <el-button :disabled="!signKeyPreview || signKeyPreview === '-'" @click="handleSignDemo">
-          3. 演示签名参数（仅前端）
+          3. 本地签名参数预览
         </el-button>
       </el-space>
 
@@ -171,7 +172,7 @@ refreshState();
           <pre>{{ encryptPayload || "暂无" }}</pre>
         </el-col>
         <el-col :span="12">
-          <h4>后端解密后再加密返回（前端已解密）</h4>
+          <h4>后端解密+验签后的响应（前端已解密）</h4>
           <pre>{{ decryptPreview || "暂无" }}</pre>
         </el-col>
       </el-row>
