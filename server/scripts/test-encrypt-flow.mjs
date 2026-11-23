@@ -1,6 +1,7 @@
 /**
- * 加解密 + HMAC 验签自测
- * genFrontendId → genSecurityParam → /client/secure/echo → nonce 防重放
+ * 安全链路回归（改加密/验签后按需跑，非业务运行时依赖）
+ * 用法：先 npm run dev，再 npm run test:flow
+ * 覆盖：协商 → /client/secure/echo 加解密验签 → nonce 防重放
  */
 import crypto from "crypto";
 

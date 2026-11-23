@@ -54,11 +54,13 @@ npm run dev
 - Health：http://localhost:8989/health
 - 加密验签探测：`POST /client/secure/echo`
 
-回归脚本（在 `server` 目录）：
+改加密/验签后可在 `server` 目录跑一条回归（需先启动服务）：
 
 ```bash
-npm run test:sign
+npm run test:flow
 ```
+
+后端说明见 [server/README.md](./server/README.md)。
 
 ## 演示路径
 

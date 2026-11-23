@@ -7,9 +7,7 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "test:security": "node scripts/test-security.mjs",
-    "test:encrypt": "node scripts/test-encrypt-flow.mjs",
-    "test:sign": "node scripts/test-encrypt-flow.mjs"
+    "test:flow": "node scripts/test-encrypt-flow.mjs"
   },
   "engines": {
     "node": ">=18.0.0"
