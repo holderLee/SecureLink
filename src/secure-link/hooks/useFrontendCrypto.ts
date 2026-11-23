@@ -10,7 +10,10 @@ import {
   decryptWithNative,
 } from "@/secure-link/utils/webCrypto";
 import { keyManager } from "@/secure-link/utils/keyManager";
-import { SUCCESS_CODE } from "@/secure-link/constants";
+import {
+  SUCCESS_CODE,
+  FRONTEND_ID_EXPIRED_CODE,
+} from "@/secure-link/constants";
 
 export const useFrontendCrypto = () => {
   /**
@@ -77,6 +80,19 @@ export const useFrontendCrypto = () => {
     return now > item.expiry;
   };
 
+  /** 清除本地 frontendId（服务端 Redis 已无该身份时使用） */
+  const clearFrontendIdStorage = () => {
+    localStorage.removeItem("frontendId");
+  };
+
+  /** 是否为「frontendId 无效/过期」类错误 */
+  const isInvalidFrontendIdError = (error: any, code?: number | string) => {
+    if (code === FRONTEND_ID_EXPIRED_CODE) return true;
+    if (error?.code === FRONTEND_ID_EXPIRED_CODE) return true;
+    const msg = String(error?.message || error || "");
+    return /invalid frontend id/i.test(msg);
+  };
+
   /**
    * 清理所有已过期的 localStorage 项
    * 可用于进入登录页时做一次本地卫生清理
@@ -102,40 +118,53 @@ export const useFrontendCrypto = () => {
    * 2. 把 frontendId + pubKey 发给后端（或本地 Mock）
    * 3. 拿回 eDek、eSignKey
    * 4. 用私钥解密，得到 DEK、signKey 并写入 keyManager
+   *
+   * 若本地 frontendId 仍在 TTL 内、但服务端 Redis 已无该身份（重启/清库等），
+   * 会自动清缓存、重新领取 frontendId 并重试一次。
+   *
+   * @returns 最终生效的 frontendId
    */
-  const fetchSecurityParam = (frontendId: any) => {
-    return new Promise<void>((resolve, reject) => {
-      generateKeysNative().then((keyData) => {
-        const { publicKey, privateKey } = keyData as any;
-        genSecurityParam({
-          frontendId,
-          pubKey: publicKey,
-        })
-          .then((res) => {
-            const {
-              data: { eDek, eSignKey },
-              code,
-              msg,
-            } = res as any;
+  const fetchSecurityParam = async (
+    frontendId: any,
+    retried = false
+  ): Promise<string> => {
+    const keyData = await generateKeysNative();
+    const { publicKey, privateKey } = keyData as any;
 
-            
-            // 业务失败：提示后结束（保持与原项目 resolve 行为一致）
-            if (code !== SUCCESS_CODE) {
-              ElMessage.error(msg);
-              resolve();
-              return;
-            }
-
-            // 解密成功后，内存中已有 DEK / signKey
-            decryptWithNative(eDek, eSignKey, privateKey).then(() => {
-              resolve();
-            });
-          })
-          .catch((error) => {
-            reject(error);
-          });
+    try {
+      const res: any = await genSecurityParam({
+        frontendId,
+        pubKey: publicKey,
       });
-    });
+      const {
+        data: { eDek, eSignKey },
+        code,
+        msg,
+      } = res;
+
+      // 业务失败：若是失效身份且尚未重试，则刷新后重协商
+      if (code !== SUCCESS_CODE) {
+        if (!retried && isInvalidFrontendIdError({ message: msg }, code)) {
+          clearFrontendIdStorage();
+          keyManager.setCacheDek();
+          const newId = (await fetchFrontendId(true)) as string;
+          return fetchSecurityParam(newId, true);
+        }
+        ElMessage.error(msg || "密钥协商失败");
+        throw new Error(msg || "密钥协商失败");
+      }
+
+      await decryptWithNative(eDek, eSignKey, privateKey);
+      return frontendId as string;
+    } catch (error: any) {
+      if (!retried && isInvalidFrontendIdError(error)) {
+        clearFrontendIdStorage();
+        keyManager.setCacheDek();
+        const newId = (await fetchFrontendId(true)) as string;
+        return fetchSecurityParam(newId, true);
+      }
+      throw error;
+    }
   };
 
   /**
@@ -161,6 +190,8 @@ export const useFrontendCrypto = () => {
               // expireTime 为毫秒时间戳，与后端返回对齐
               setLocalStorageWithExpiry("frontendId", frontendId, expireTime);
               resolve(frontendId);
+            } else {
+              reject(new Error("未获取到 frontendId"));
             }
           })
           .catch((error) => {
@@ -170,19 +201,21 @@ export const useFrontendCrypto = () => {
       // 检查本地frontendId是否过期
       const isExpired = isLocalStorageExpired("frontendId");
       /**
-       * 需要强制刷新（先存旧 DEK，方便后续“旧密文 → 新 DEK”过渡） 
+       * 需要强制刷新（先存旧 DEK，方便后续“旧密文 → 新 DEK”过渡）
        * 或
        * 已过期，重新获取frontendId
        */
       if (isUpdate || isExpired) {
         keyManager.setCacheDek();
         initFrontend();
-      }else {
+      } else {
         // 检查本地frontendId是否存在
         const _frontendId = getLocalStorageWithExpiry("frontendId");
-        if (_frontendId) { //存在，直接返回
+        if (_frontendId) {
+          //存在，直接返回
           resolve(_frontendId);
-        } else { //不存在，重新获取frontendId
+        } else {
+          //不存在，重新获取frontendId
           initFrontend();
         }
       }
@@ -194,6 +227,7 @@ export const useFrontendCrypto = () => {
     setLocalStorageWithExpiry,
     isLocalStorageExpired,
     cleanupExpiredLocalStorage,
+    clearFrontendIdStorage,
     fetchFrontendId,
     fetchSecurityParam,
   };

@@ -98,6 +98,43 @@ const flowSteps = [
   },
 ];
 
+/** 落地业务场景（产品口径，非教学文案） */
+const useCases = [
+  {
+    domain: "账户安全",
+    title: "登录 / 改密 / 支付口令",
+    outcome:
+      "口令类字段在提交链路中以密文传输，降低网关访问日志与中间节点明文落盘风险。",
+  },
+  {
+    domain: "合规采集",
+    title: "实名 · 银行卡 · 手机号",
+    outcome:
+      "个人敏感信息在业务入口完成字段级加密，满足最小暴露与审计留痕要求。",
+  },
+  {
+    domain: "高危操作",
+    title: "资金审批 · 权限变更",
+    outcome: "关键写请求强制验签与一次性 nonce，拦截参数篡改与短时重放。",
+  },
+  {
+    domain: "活动防刷",
+    title: "领券 · 秒杀 · 积分兑换",
+    outcome: "活动资格与兑换参数加密上送并验签，拦截篡改额度与短时重放刷单。",
+  },
+  {
+    domain: "交易确认",
+    title: "下单支付与二次确认",
+    outcome: "金额、收款方等关键载荷加密上送，服务端验签通过后再进入账务处理。",
+  },
+  {
+    domain: "医疗健康",
+    title: "病历 · 报告 · 理赔材料",
+    outcome:
+      "诊疗与理赔敏感附件在提交入口即字段加密，服务端验签后进入归档流转。",
+  },
+];
+
 const mask = (value: string, keep = 8) => {
   if (!value) return "-";
   if (value.length <= keep * 2) return value;
@@ -140,19 +177,20 @@ const handleInit = async () => {
   loading.value = true;
   try {
     // 不传 true：优先读 localStorage 缓存，过期/缺失才向服务端申请
-    const id = (await fetchFrontendId()) as string;
+    let id = (await fetchFrontendId()) as string;
     if (!id) {
       throw new Error("未获取到 frontendId");
     }
     // 刷新后密钥只在内存丢失时需要重新协商
+    // 若本地 id 对服务端已失效，fetchSecurityParam 会自动换新 id 并重试
     if (!keyManager.getDek() || !keyManager.getSignKey()) {
-      await fetchSecurityParam(id);
+      id = await fetchSecurityParam(id);
     }
     refreshState();
     playStep.value = Math.max(playStep.value, 1);
     notify(
       "success",
-      cachedId
+      cachedId && id === cachedId
         ? "已复用 frontendId，并完成密钥协商"
         : "已完成 frontendId 与密钥协商"
     );
@@ -237,7 +275,7 @@ refreshState();
       <p class="sl-hero__eyebrow">Frontend Security Demo</p>
       <h1 class="sl-hero__brand">SecureLink</h1>
       <p class="sl-hero__tagline">
-        让敏感请求像聊天一样被保护 —— 从身份、密钥到加密验签，一眼看懂整条链路。
+        面向浏览器到业务服务的敏感链路：密钥协商、字段加密与请求验签一体落地。
       </p>
       <div class="sl-hero__actions">
         <button
@@ -245,17 +283,44 @@ refreshState();
           class="sl-btn sl-btn--primary"
           @click="scrollToPlay"
         >
-          开始体验
+          接入验证
         </button>
         <span class="sl-mode">当前：{{ modeText }}</span>
       </div>
     </header>
 
+    <!-- 落地场景 -->
+    <section class="sl-section sl-cases" aria-labelledby="cases-title">
+      <h2 id="cases-title" class="sl-section__title">落地业务场景</h2>
+      <p class="sl-section__lead">
+        在 HTTPS
+        之上补齐字段加密与请求验签，直接挂到现有业务入口，覆盖下列高频敏感链路。
+      </p>
+
+      <div class="sl-cases__grid">
+        <article
+          v-for="(item, index) in useCases"
+          :key="item.title"
+          class="sl-cases__item"
+          :style="{ '--case-i': index }"
+        >
+          <div class="sl-cases__meta">
+            <span class="sl-cases__domain">{{ item.domain }}</span>
+            <span class="sl-cases__idx">{{
+              String(index + 1).padStart(2, "0")
+            }}</span>
+          </div>
+          <h3>{{ item.title }}</h3>
+          <p>{{ item.outcome }}</p>
+        </article>
+      </div>
+    </section>
+
     <!-- 四步流程 -->
     <section class="sl-section sl-flow" aria-labelledby="flow-title">
-      <h2 id="flow-title" class="sl-section__title">安全流程，四步说清</h2>
+      <h2 id="flow-title" class="sl-section__title">链路能力</h2>
       <p class="sl-section__lead">
-        不用先啃密码学名词：跟着步骤走一遍，就知道数据是怎么被保护起来的。
+        身份标识、密钥协商、加密传输与验签防重放，构成可上线的应用层安全闭环。
       </p>
 
       <ol class="sl-flow__list">
@@ -283,9 +348,9 @@ refreshState();
       class="sl-section sl-play"
       aria-labelledby="play-title"
     >
-      <h2 id="play-title" class="sl-section__title">动手走一遍</h2>
+      <h2 id="play-title" class="sl-section__title">联调验证</h2>
       <p class="sl-section__lead">
-        按顺序点下方步骤。完成后，上方流程会跟着亮起，方便对照当前进度。
+        按序完成初始化、加密传输与签名预览，确认前后端安全链路可用。
       </p>
 
       <div class="sl-play__guide">
@@ -517,6 +582,83 @@ refreshState();
   font-size: clamp(0.95rem, 2.5vw, 1.05rem);
   line-height: 1.7;
   color: var(--sl-muted);
+}
+
+/* ----- Use cases ----- */
+.sl-cases__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 32px;
+}
+
+.sl-cases__item {
+  position: relative;
+  padding: 22px 20px 24px;
+  overflow: hidden;
+  background: linear-gradient(
+    160deg,
+    rgb(255 255 255 / 88%) 0%,
+    rgb(240 253 250 / 70%) 100%
+  );
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--sl-line);
+  border-radius: 22px;
+  animation: sl-fade-up 0.7s ease both;
+  animation-delay: calc(var(--case-i, 0) * 0.05s);
+
+  &::before {
+    position: absolute;
+    top: -40%;
+    right: -20%;
+    width: 140px;
+    height: 140px;
+    pointer-events: none;
+    content: "";
+    background: radial-gradient(circle, rgb(13 148 136 / 16%), transparent 68%);
+  }
+
+  h3 {
+    position: relative;
+    margin: 0 0 10px;
+    font-size: 1.08rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+
+  p {
+    position: relative;
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: var(--sl-muted);
+  }
+}
+
+.sl-cases__meta {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.sl-cases__domain {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--sl-teal);
+  letter-spacing: 0.04em;
+  background: rgb(13 148 136 / 10%);
+  border-radius: 999px;
+}
+
+.sl-cases__idx {
+  font-size: 0.85rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: rgb(13 148 136 / 45%);
 }
 
 /* ----- Flow ----- */
@@ -783,6 +925,10 @@ refreshState();
 
 /* ----- Tablet ----- */
 @media (width <= 900px) {
+  .sl-cases__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .sl-flow__list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -802,6 +948,7 @@ refreshState();
 
 /* ----- Phone ----- */
 @media (width <= 640px) {
+  .sl-cases__grid,
   .sl-flow__list {
     grid-template-columns: 1fr;
   }
@@ -837,6 +984,7 @@ refreshState();
 
 @media (prefers-reduced-motion: reduce) {
   .sl-hero,
+  .sl-cases__item,
   .sl-flow__item,
   .sl-play__step,
   .sl-keys,

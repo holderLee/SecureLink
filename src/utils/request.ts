@@ -20,6 +20,7 @@ import {
 } from "@/secure-link/utils/webCrypto";
 import { objectToQueryString } from "@/secure-link/utils/query";
 import { keyManager } from "@/secure-link/utils/keyManager";
+import { FRONTEND_ID_EXPIRED_CODE } from "@/secure-link/constants";
 
 /** 读取带过期结构的 frontendId（避免 request ↔ useFrontendCrypto 循环依赖） */
 function getFrontendIdFromStorage() {
@@ -146,8 +147,13 @@ service.interceptors.response.use(
       return response;
     }
 
-    ElMessage.error(msg || "系统出错");
-    return Promise.reject(new Error(msg || "Error"));
+    // frontendId 失效：交给业务层清缓存并重新协商，避免先弹错误再自动恢复
+    const err = new Error(msg || "Error") as Error & { code?: number | string };
+    err.code = code;
+    if (code !== FRONTEND_ID_EXPIRED_CODE) {
+      ElMessage.error(msg || "系统出错");
+    }
+    return Promise.reject(err);
   },
   (error: any) => {
     if (error.response?.data) {
@@ -162,9 +168,14 @@ service.interceptors.response.use(
             location.reload();
           });
         });
-      } else {
+      } else if (code !== FRONTEND_ID_EXPIRED_CODE) {
         ElMessage.error(msg || "系统出错");
       }
+      const err = new Error(msg || error.message || "Error") as Error & {
+        code?: number | string;
+      };
+      err.code = code;
+      return Promise.reject(err);
     }
     return Promise.reject(error.message || error);
   }
